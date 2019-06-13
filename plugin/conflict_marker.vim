@@ -33,15 +33,6 @@ nnoremap <silent><Plug>(conflict-marker-next-hunk)  :<C-u>ConflictMarkerNextHunk
 nnoremap <silent><Plug>(conflict-marker-prev-hunk)  :<C-u>ConflictMarkerPrevHunk<CR>
 
 function! s:execute_hooks()
-    if g:conflict_marker_enable_mappings
-        nmap <buffer>]x <Plug>(conflict-marker-next-hunk)
-        nmap <buffer>[x <Plug>(conflict-marker-prev-hunk)
-        nmap <buffer>ct <Plug>(conflict-marker-themselves)
-        nmap <buffer>co <Plug>(conflict-marker-ourselves)
-        nmap <buffer>cn <Plug>(conflict-marker-none)
-        nmap <buffer>cb <Plug>(conflict-marker-both)
-    endif
-
     if exists('g:conflict_marker_hooks') && has_key(g:conflict_marker_hooks, 'on_detected')
         if type(g:conflict_marker_hooks.on_detected) == type('')
             call call(function(g:conflict_marker_hooks.on_detected), [])
@@ -72,23 +63,51 @@ function! s:set_conflict_marker_to_match_words()
     let b:conflict_marker_match_words_loaded = 1
 endfunction
 
-function! s:on_detected()
-    if g:conflict_marker_enable_hooks
-        call s:execute_hooks()
-    endif
+function! s:init_mode()
+    let mappings = []
+    call add(mappings, mode#mapping#create('n', 0, 1, ']x', '<Plug>(conflict-marker-next-hunk)'))
+    call add(mappings, mode#mapping#create('n', 0, 1, '[x', '<Plug>(conflict-marker-prev-hunk)'))
+    call add(mappings, mode#mapping#create('n', 0, 1, 'ct', '<Plug>(conflict-marker-themselves)'))
+    call add(mappings, mode#mapping#create('n', 0, 1, 'co', '<Plug>(conflict-marker-ourselves)'))
+    call add(mappings, mode#mapping#create('n', 0, 1, 'cn', '<Plug>(conflict-marker-none)'))
+    call add(mappings, mode#mapping#create('n', 0, 1, 'cb', '<Plug>(conflict-marker-both)'))
 
-    if g:conflict_marker_enable_highlight
-        execute printf('syntax match ConflictMarker containedin=ALL /\%(%s\|%s\|%s\)/',
-                \      g:conflict_marker_begin,
-                \      g:conflict_marker_separator,
-                \      g:conflict_marker_end)
-        execute 'highlight link ConflictMarker '.g:conflict_marker_highlight_group
-    endif
-
-    if g:conflict_marker_enable_matchit
-        call s:set_conflict_marker_to_match_words()
-    endif
+    try
+        call mode#add('conflict_marker', 'C', mappings)
+    catch /^E117
+        echom 'Please install https://github.com/tenfyzhong/mode.vim first'
+        return
+    endtry
 endfunction
+
+let s:inited = 0
+function! s:enable()
+    if !s:inited
+        call s:init_mode()
+        let s:inited = 1
+    endif
+    call mode#enable('conflict_marker')
+endfunction
+
+function! s:disable()
+    call mode#disable('conflict_marker')
+endfunction
+
+function! s:on_detected()
+    echom "It seems some conflict in the file, please resolve it."
+endfunction
+
+if g:conflict_marker_enable_highlight
+    execute printf('syntax match ConflictMarker containedin=ALL /\%(%s\|%s\|%s\)/',
+            \      g:conflict_marker_begin,
+            \      g:conflict_marker_separator,
+            \      g:conflict_marker_end)
+    execute 'highlight link ConflictMarker '.g:conflict_marker_highlight_group
+endif
+
+if g:conflict_marker_enable_matchit
+    call s:set_conflict_marker_to_match_words()
+endif
 
 augroup ConflictMarkerDetect
     autocmd!
@@ -98,6 +117,9 @@ augroup END
 if g:conflict_marker_enable_highlight
     execute 'highlight link ConflictMarker '.g:conflict_marker_highlight_group
 endif
+
+command! ConflictMarkerEnable call <SID>enable()
+command! ConflictMarkerDisable call <SID>disable()
 
 let &cpo = s:save_cpo
 unlet s:save_cpo
